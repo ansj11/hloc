@@ -164,9 +164,10 @@ class ImageDataset(torch.utils.data.Dataset):
         "interpolation": "cv2_area",  # pil_linear is more accurate but slower
     }
 
-    def __init__(self, root, conf, paths=None):
+    def __init__(self, root, conf, paths=None, bboxes=None):
         self.conf = conf = SimpleNamespace(**{**self.default_conf, **conf})
         self.root = root
+        self.bboxes = bboxes
 
         if paths is None:
             paths = []
@@ -193,6 +194,9 @@ class ImageDataset(torch.utils.data.Dataset):
         name = self.names[idx]
         image = read_image(self.root / name, self.conf.grayscale)
         image = image.astype(np.float32)
+        if self.bboxes is not None:
+            bbox = self.bboxes[idx]
+            image = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
         size = image.shape[:2][::-1]
 
         if self.conf.resize_max and (
@@ -227,12 +231,13 @@ def main(
     image_list: Optional[Union[Path, List[str]]] = None,
     feature_path: Optional[Path] = None,
     overwrite: bool = False,
+    bboxes: np.array = None,
 ) -> Path:
     logger.info(
         "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
     )
 
-    dataset = ImageDataset(image_dir, conf["preprocessing"], image_list)
+    dataset = ImageDataset(image_dir, conf["preprocessing"], image_list, bboxes=bboxes)
     if feature_path is None:
         feature_path = Path(export_dir, conf["output"] + ".h5")
     feature_path.parent.mkdir(exist_ok=True, parents=True)
@@ -261,6 +266,8 @@ def main(
             size = np.array(data["image"].shape[-2:][::-1])
             scales = (original_size / size).astype(np.float32)
             pred["keypoints"] = (pred["keypoints"] + 0.5) * scales[None] - 0.5
+            if bboxes is not None:
+                pred["keypoints"] = pred["keypoints"] + bboxes[idx, :2]
             if "scales" in pred:
                 pred["scales"] *= scales.mean()
             # add keypoint uncertainties scaled to the original resolution
