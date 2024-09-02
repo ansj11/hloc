@@ -17,6 +17,7 @@ from . import extractors, logger
 from .utils.base_model import dynamic_load
 from .utils.io import list_h5_names, read_image
 from .utils.parsers import parse_image_lists
+from pdb import set_trace
 
 """
 A set of standard configurations that can be directly selected from the command
@@ -190,13 +191,33 @@ class ImageDataset(torch.utils.data.Dataset):
                 if not (root / name).exists():
                     raise ValueError(f"Image {name} does not exists in root: {root}.")
 
+    def get_bbox(self, idx, height, width, scale=1.5, mode=''):
+        bbox = self.bboxes[idx]
+        x0, y0, x1, y1 = [int(x) for x in bbox]
+        if mode == 'expand':
+            h, w = (y1 - y0), (x1 - x0)
+            th, tw = h * scale, w * scale
+            cx, cy = (x0+x1)/2, (y0+y1)/2
+            x0 = int(max(0, cx - tw/2))
+            x1 = int(min(width, cx + tw/2))
+            y0 = int(max(0, cy - th/2))
+            y1 = int(min(height-1, cy + th/2))
+        elif mode == 'minmax':
+            x0, y0 = self.bboxes.min(axis=0)[:2].astype('int')
+            x1, y1 = self.bboxes.max(axis=0)[2:].astype('int')
+        
+        return [x0, y0, x1, y1]
+    
     def __getitem__(self, idx):
         name = self.names[idx]
         image = read_image(self.root / name, self.conf.grayscale)
+        bbox = self.bboxes.get(name, None)
+        if bbox is not None:
+            image = image[bbox[1] : bbox[3], bbox[0] : bbox[2]]
+            cv2.imwrite(f'./debug/{idx}.jpg', image)
+        else:
+            logger.warning(f"No bbox found for image {name}.")
         image = image.astype(np.float32)
-        if self.bboxes is not None:
-            bbox = self.bboxes[idx]
-            image = image[bbox[1]:bbox[3], bbox[0]:bbox[2]]
         size = image.shape[:2][::-1]
 
         if self.conf.resize_max and (
@@ -231,7 +252,7 @@ def main(
     image_list: Optional[Union[Path, List[str]]] = None,
     feature_path: Optional[Path] = None,
     overwrite: bool = False,
-    bboxes: np.array = None,
+    bboxes: Optional[Union[List[List[int]], Dict[str, List[int]]]] = None,
 ) -> Path:
     logger.info(
         "Extracting local features with configuration:" f"\n{pprint.pformat(conf)}"
@@ -252,9 +273,9 @@ def main(
     device = "cuda" if torch.cuda.is_available() else "cpu"
     Model = dynamic_load(extractors, conf["model"]["name"])
     model = Model(conf["model"]).eval().to(device)
-
+    
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=1, shuffle=False, pin_memory=True
+        dataset, num_workers=0, shuffle=False, pin_memory=True
     )
     for idx, data in enumerate(tqdm(loader)):
         name = dataset.names[idx]
@@ -266,8 +287,15 @@ def main(
             size = np.array(data["image"].shape[-2:][::-1])
             scales = (original_size / size).astype(np.float32)
             pred["keypoints"] = (pred["keypoints"] + 0.5) * scales[None] - 0.5
-            if bboxes is not None:
-                pred["keypoints"] = pred["keypoints"] + bboxes[idx, :2]
+
+            # 将特征点转换到大图
+            bbox = dataset.bboxes.get(name, None)
+            if bbox is not None:
+                pred["keypoints"][:, 0] += bbox[0]
+                pred["keypoints"][:, 1] += bbox[1]
+            else:
+                logger.warning(f"No bbox found for image {name}.")
+
             if "scales" in pred:
                 pred["scales"] *= scales.mean()
             # add keypoint uncertainties scaled to the original resolution
