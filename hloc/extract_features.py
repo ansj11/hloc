@@ -211,8 +211,8 @@ class ImageDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         name = self.names[idx]
         image = read_image(self.root / name, self.conf.grayscale)
-        bbox = self.bboxes.get(name, None)
-        if bbox is not None:
+        if self.bboxes is not None:
+            bbox = self.bboxes.get(name, None)
             image = image[bbox[1] : bbox[3], bbox[0] : bbox[2]]
             cv2.imwrite(f'./debug/{idx}.jpg', image)
         else:
@@ -289,8 +289,8 @@ def main(
             pred["keypoints"] = (pred["keypoints"] + 0.5) * scales[None] - 0.5
 
             # 将特征点转换到大图
-            bbox = dataset.bboxes.get(name, None)
-            if bbox is not None:
+            if dataset.bboxes is not None:
+                bbox = dataset.bboxes.get(name, None)
                 pred["keypoints"][:, 0] += bbox[0]
                 pred["keypoints"][:, 1] += bbox[1]
             else:
