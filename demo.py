@@ -33,7 +33,7 @@ outputs = Path(outpath)
 # os.system('rm -rf $outputs')
 sfm_pairs = outputs / "pairs-sfm.txt"
 loc_pairs = outputs / "pairs-loc.txt"
-sfm_dir = outputs / "sfm.txt"
+sfm_dir = outputs / "sfm"
 features = outputs / "features.h5"
 matches =  outputs / "matches.h5"
 
@@ -63,8 +63,8 @@ print(bboxes)
 extract_features.main(
     feature_conf, images, image_list=references, feature_path=features, bboxes=bboxes
 )
-# pairs_from_exhaustive.main(sfm_pairs, image_list=references)
-pairs_from_sequence.main(sfm_pairs, image_list=references, features=features, window_size=3)
+pairs_from_exhaustive.main(sfm_pairs, image_list=references)
+# pairs_from_sequence.main(sfm_pairs, image_list=references, features=features, window_size=3)
 match_features.main(matcher_conf, sfm_pairs, features=features, matches=matches);
 
 
@@ -85,12 +85,7 @@ visualization.visualize_sfm_2d(model, images, color_by="visibility", n=2)
 
 
 # # Localization
-# Now that we have a 3D map of the scene, we can localize any image. To demonstrate this, we download [a night-time image from 
-# Wikimedia](https://commons.wikimedia.org/wiki/File:Paris_-_Basilique_du_Sacr%C3%A9_Coeur,_Montmartre_-_panoramio.jpg).
 url = "https://upload.wikimedia.org/wikipedia/commons/5/53/Paris_-_Basilique_du_Sacr%C3%A9_Coeur%2C_Montmartre_-_panoramio.jpg"
-# try other queries by uncommenting their url
-# url = "https://upload.wikimedia.org/wikipedia/commons/5/59/Basilique_du_Sacr%C3%A9-C%C5%93ur_%285430392880%29.jpg"
-# url = "https://upload.wikimedia.org/wikipedia/commons/8/8e/Sacr%C3%A9_C%C5%93ur_at_night%21_%285865355326%29.jpg"
 query = "query/night.jpg"
 # get_ipython().system('mkdir -p $images/query && wget $url -O $images/$query -q')
 # plot_images([read_image(images / query)], dpi=75)

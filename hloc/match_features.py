@@ -5,7 +5,7 @@ from pathlib import Path
 from queue import Queue
 from threading import Thread
 from typing import Dict, List, Optional, Tuple, Union
-
+import os
 import h5py
 import torch
 from tqdm import tqdm
@@ -13,6 +13,7 @@ from tqdm import tqdm
 from . import logger, matchers
 from .utils.base_model import dynamic_load
 from .utils.parsers import names_to_pair, names_to_pair_old, parse_retrieval
+from pdb import set_trace
 
 """
 A set of standard configurations that can be directly selected from the command
@@ -122,7 +123,13 @@ class FeaturePairsDataset(torch.utils.data.Dataset):
             # some matchers might expect an image but only use its size
             data["image0"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
         with h5py.File(self.feature_path_r, "r") as fd:
-            grp = fd[name1]
+            try:
+                grp = fd[name1]
+            except:
+                set_trace()
+                print(f"key {name1} not exists...")
+                name1 = os.path.basename(name1)
+                grp = fd[name1]
             for k, v in grp.items():
                 data[k + "1"] = torch.from_numpy(v.__array__()).float()
             data["image1"] = torch.empty((1,) + tuple(grp["image_size"])[::-1])
@@ -232,7 +239,7 @@ def match_from_paths(
 
     dataset = FeaturePairsDataset(pairs, feature_path_q, feature_path_ref)
     loader = torch.utils.data.DataLoader(
-        dataset, num_workers=5, batch_size=1, shuffle=False, pin_memory=True
+        dataset, num_workers=0, batch_size=1, shuffle=False, pin_memory=True
     )
     writer_queue = WorkQueue(partial(writer_fn, match_path=match_path), 5)
 

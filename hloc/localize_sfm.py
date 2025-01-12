@@ -91,7 +91,6 @@ def pose_from_cluster(
         points3D_ids = np.array(
             [p.point3D_id if p.has_point3D() else -1 for p in image.points2D]
         )
-
         matches, _ = get_matches(matches_path, qname, image.name)
         matches = matches[points3D_ids[matches[:, 1]] != -1]
         num_matches += len(matches)
